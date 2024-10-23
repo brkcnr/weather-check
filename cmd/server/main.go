@@ -6,7 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
+
+	"github.com/joho/godotenv"
 )
 
 type Weather struct {
@@ -20,6 +23,14 @@ type Weather struct {
 	} `json:"current"`
 }
 
+func init() {
+	// Load the .env file at the beginning of the application
+	err := godotenv.Load("cmd/server/.env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+}
+
 func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse the "city" query parameter from the request URL
 	city := r.URL.Query().Get("city")
@@ -28,8 +39,15 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create the API request URL with the user-specified city
-	apiURL := fmt.Sprintf("http://api.weatherapi.com/v1/current.json?key=785808c3af0e49e7a78122858242110&q=%s&aqi=no", city)
+	// Fetch API key from the environment
+	apiKey := os.Getenv("WEATHER_API_KEY")
+	if apiKey == "" {
+		http.Error(w, "API key not found", http.StatusInternalServerError)
+		return
+	}
+
+	// Create the API request URL using the API key and city
+	apiURL := fmt.Sprintf("http://api.weatherapi.com/v1/current.json?key=%s&q=%s&aqi=no", apiKey, city)
 
 	// Make the HTTP request to the weather API
 	res, err := http.Get(apiURL)
