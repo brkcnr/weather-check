@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/brkcnr/getweatherapi/internal/service"
+	service "github.com/brkcnr/getweatherapi/internal/services"
 )
 
 func WeatherHandler(w http.ResponseWriter, r *http.Request) {
