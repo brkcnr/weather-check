@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -13,87 +13,113 @@ import (
 )
 
 type Weather struct {
-	Location struct {
-		Name    string `json:"name"`
-		Region  string `json:"region"`
-		Country string `json:"country"`
-	} `json:"location"`
-	Current struct {
-		Temperature float64 `json:"temp_c"`
-		FeelsLike   float64 `json:"feelslike_c"`
-	} `json:"current"`
+	City        string  `json:"city"`
+	Region      string  `json:"region"`
+	Country     string  `json:"country"`
+	Temperature float64 `json:"temperature"`
+	FeelsLike   float64 `json:"feels_like"`
+}
+
+type ErrorMessage struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 func init() {
-	// Load the .env file at the beginning of the application
-	err := godotenv.Load("cmd/server/.env")
-	if err != nil {
+	if err := godotenv.Load("cmd/server/.env"); err != nil {
 		log.Fatal("Error loading .env file")
 	}
 }
 
+func GetWeather(apiKey, city string) (Weather, ErrorMessage) {
+	baseURL := "http://api.weatherapi.com/v1/current.json"
+	fullURL := fmt.Sprintf("%s?key=%s&q=%s&aqi=no", baseURL, apiKey, url.QueryEscape(city))
+
+	response, err := http.Get(fullURL)
+	if err != nil {
+		return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to make request"}
+	}
+	defer response.Body.Close()
+
+	switch response.StatusCode {
+	case http.StatusOK:
+		var apiResponse map[string]interface{}
+		if err := json.NewDecoder(response.Body).Decode(&apiResponse); err != nil {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to parse response"}
+		}
+
+		location, ok := apiResponse["location"].(map[string]interface{})
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve location data"}
+		}
+		cityName, ok := location["name"].(string)
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve city name"}
+		}
+		region, ok := location["region"].(string)
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve region"}
+		}
+		country, ok := location["country"].(string)
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve country name"}
+		}
+
+		current, ok := apiResponse["current"].(map[string]interface{})
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve current weather data"}
+		}
+		tempC, ok := current["temp_c"].(float64)
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve temperature"}
+		}
+		feelsLike, ok := current["feelslike_c"].(float64)
+		if !ok {
+			return Weather{}, ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve feels like temperature"}
+		}
+
+		return Weather{
+			City:        cityName,
+			Region:      region,
+			Country:     country,
+			Temperature: tempC,
+			FeelsLike:   feelsLike,
+		}, ErrorMessage{}
+
+	case http.StatusBadRequest:
+		return Weather{}, ErrorMessage{Code: http.StatusBadRequest, Message: "Invalid city name. Please try again."}
+
+	case http.StatusForbidden:
+		var errorResponse map[string]interface{}
+		json.NewDecoder(response.Body).Decode(&errorResponse)
+		return Weather{}, ErrorMessage{Code: http.StatusForbidden, Message: "Forbidden access"}
+
+	default:
+		return Weather{}, ErrorMessage{Code: response.StatusCode, Message: "Unexpected status code"}
+	}
+}
+
 func WeatherHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse the "city" query parameter from the request URL
 	city := r.URL.Query().Get("city")
 	if city == "" {
 		http.Error(w, "City parameter is required", http.StatusBadRequest)
 		return
 	}
 
-	// Fetch API key from the environment
 	apiKey := os.Getenv("WEATHER_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "API key not found", http.StatusInternalServerError)
 		return
 	}
 
-	// Create the API request URL using the API key and city
-	apiURL := fmt.Sprintf("http://api.weatherapi.com/v1/current.json?key=%s&q=%s&aqi=no", apiKey, city)
-
-	// Make the HTTP request to the weather API
-	res, err := http.Get(apiURL)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	weather, err := GetWeather(apiKey, city)
+	if err.Code != 0 {
+		http.Error(w, err.Message, err.Code)
 		return
 	}
 
-	// Check if the API response has an error status code
-	if res.StatusCode > 299 {
-		http.Error(w, fmt.Sprintf("Response failed with status code: %d and body: %s", res.StatusCode, body), http.StatusInternalServerError)
-		return
-	}
-
-	// Unmarshal the response body into the Weather struct
-	var weather Weather
-	err = json.Unmarshal(body, &weather)
-	if err != nil {
-		http.Error(w, "Failed to unmarshal response", http.StatusInternalServerError)
-		return
-	}
-
-	// Prepare the response map
-	responseMap := map[string]any{
-		"city":        weather.Location.Name,
-		"region":      weather.Location.Region,
-		"country":     weather.Location.Country,
-		"temperature": weather.Current.Temperature,
-		"feels_like":  weather.Current.FeelsLike,
-	}
-
-	// Set the content type to JSON and encode the response
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(responseMap)
-	if err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	json.NewEncoder(w).Encode(weather)
 }
 
 func HomePageHandler(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +130,6 @@ func HomePageHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/weather", WeatherHandler)
 	http.HandleFunc("/", HomePageHandler)
-
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
 	log.Println("Starting server on :8080...")
