@@ -15,6 +15,7 @@ import (
 type Weather struct {
 	Location struct {
 		Name    string `json:"name"`
+		Region  string `json:"region"`
 		Country string `json:"country"`
 	} `json:"location"`
 	Current struct {
@@ -80,6 +81,7 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 	// Prepare the response map
 	responseMap := map[string]any{
 		"city":        weather.Location.Name,
+		"region":      weather.Location.Region,
 		"country":     weather.Location.Country,
 		"temperature": weather.Current.Temperature,
 		"feels_like":  weather.Current.FeelsLike,

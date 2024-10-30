@@ -96,6 +96,7 @@
 
         <div class="weather-info" id="weather-info">
             <p><strong>City:</strong> <span id="city"></span></p>
+            <p><strong>Region:</strong> <span id="region"></span></p>
             <p><strong>Country:</strong> <span id="country"></span></p>
             <p><strong>Temperature:</strong> <span id="temperature"></span> °C</p>
             <p><strong>Feels Like:</strong> <span id="feels-like"></span> °C</p>
@@ -125,6 +126,7 @@
                 // Display weather info after fetching successfully
                 document.getElementById('weather-info').style.display = "block";
                 document.getElementById('city').textContent = data.city;
+                document.getElementById('region').textContent = data.region;
                 document.getElementById('country').textContent = data.country;
                 document.getElementById('temperature').textContent = data.temperature;
                 document.getElementById('feels-like').textContent = data.feels_like;
