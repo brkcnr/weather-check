@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -12,6 +13,7 @@ import (
 func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 	baseURL := "http://api.weatherapi.com/v1/current.json"
 	fullURL := fmt.Sprintf("%s?key=%s&q=%s&aqi=no", baseURL, apiKey, url.QueryEscape(city))
+	log.Println("Requesting URL:", fullURL)
 
 	response, err := http.Get(fullURL)
 	if err != nil {
@@ -42,6 +44,10 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 		if !ok {
 			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve country name"}
 		}
+		timezoneId, ok := location["tz_id"].(string)
+		if !ok {
+			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve timezone"}
+		}
 
 		current, ok := apiResponse["current"].(map[string]interface{})
 		if !ok {
@@ -55,13 +61,20 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 		if !ok {
 			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve feels like temperature"}
 		}
+		weatherCondition, ok := current["condition"].(map[string]interface{})
+		if !ok {
+			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Weather Condition"}
+		}
+		weatherConditionText, _ := weatherCondition["text"].(string)
 
 		return models.Weather{
-			City:        cityName,
-			Region:      region,
-			Country:     country,
-			Temperature: tempC,
-			FeelsLike:   feelsLike,
+			City:             cityName,
+			Region:           region,
+			Country:          country,
+			Temperature:      tempC,
+			FeelsLike:        feelsLike,
+			TimeZoneId:       timezoneId,
+			WeatherCondition: weatherConditionText,
 		}, models.ErrorMessage{}
 
 	case http.StatusBadRequest:

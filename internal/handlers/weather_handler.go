@@ -10,6 +10,12 @@ import (
 )
 
 func WeatherHandler(w http.ResponseWriter, r *http.Request) {
+	// Handle only GET requests
+	if r.Method != http.MethodGet {
+		http.Error(w, "This code can only handle GET requests", http.StatusMethodNotAllowed)
+		return
+	}
+
 	city := r.URL.Query().Get("city")
 	if city == "" {
 		http.Error(w, "City parameter is required", http.StatusBadRequest)
@@ -23,7 +29,7 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call weather.GetWeather instead of just GetWeather
+	// Call weather service to get weather data
 	weatherData, err := service.GetWeather(apiKey, city)
 	if err.Code != 0 {
 		http.Error(w, err.Message, err.Code)
