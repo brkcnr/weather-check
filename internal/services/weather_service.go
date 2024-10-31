@@ -10,6 +10,16 @@ import (
 	"github.com/brkcnr/getweatherapi/internal/models"
 )
 
+const (
+	errRequestFailed    = "Failed to make request"
+	errParseResponse    = "Failed to parse response"
+	errLocationData     = "Failed to retrieve location data"
+	errWeatherData      = "Failed to retrieve current weather data"
+	errConditionData    = "Failed to retrieve weather condition data"
+	errForbiddenAccess  = "Forbidden access"
+	errUnexpectedStatus = "Unexpected status code"
+)
+
 func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 	baseURL := "http://api.weatherapi.com/v1/current.json"
 	fullURL := fmt.Sprintf("%s?key=%s&q=%s&aqi=no", baseURL, apiKey, url.QueryEscape(city))
@@ -17,7 +27,7 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 
 	response, err := http.Get(fullURL)
 	if err != nil {
-		return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to make request"}
+		return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errRequestFailed}
 	}
 	defer response.Body.Close()
 
@@ -25,45 +35,28 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 	case http.StatusOK:
 		var apiResponse map[string]interface{}
 		if err := json.NewDecoder(response.Body).Decode(&apiResponse); err != nil {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to parse response"}
+			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errParseResponse}
 		}
 
 		location, ok := apiResponse["location"].(map[string]interface{})
 		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve location data"}
+			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errLocationData}
 		}
-		cityName, ok := location["name"].(string)
-		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve city name"}
-		}
-		region, ok := location["region"].(string)
-		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve region"}
-		}
-		country, ok := location["country"].(string)
-		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve country name"}
-		}
-		timezoneId, ok := location["tz_id"].(string)
-		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve timezone"}
-		}
+		cityName, _ := location["name"].(string)
+		region, _ := location["region"].(string)
+		country, _ := location["country"].(string)
+		timezoneId, _ := location["tz_id"].(string)
 
 		current, ok := apiResponse["current"].(map[string]interface{})
 		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve current weather data"}
+			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errWeatherData}
 		}
-		tempC, ok := current["temp_c"].(float64)
-		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve temperature"}
-		}
-		feelsLike, ok := current["feelslike_c"].(float64)
-		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Failed to retrieve feels like temperature"}
-		}
+		tempC, _ := current["temp_c"].(float64)
+		feelsLike, _ := current["feelslike_c"].(float64)
+
 		weatherCondition, ok := current["condition"].(map[string]interface{})
 		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: "Weather Condition"}
+			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errConditionData}
 		}
 		weatherConditionText, _ := weatherCondition["text"].(string)
 
@@ -77,15 +70,12 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 			WeatherCondition: weatherConditionText,
 		}, models.ErrorMessage{}
 
-	case http.StatusBadRequest:
-		return models.Weather{}, models.ErrorMessage{Code: http.StatusBadRequest, Message: "Invalid city name. Please try again."}
-
 	case http.StatusForbidden:
 		var errorResponse map[string]interface{}
 		json.NewDecoder(response.Body).Decode(&errorResponse)
-		return models.Weather{}, models.ErrorMessage{Code: http.StatusForbidden, Message: "Forbidden access"}
+		return models.Weather{}, models.ErrorMessage{Code: http.StatusForbidden, Message: errForbiddenAccess}
 
 	default:
-		return models.Weather{}, models.ErrorMessage{Code: response.StatusCode, Message: "Unexpected status code"}
+		return models.Weather{}, models.ErrorMessage{Code: response.StatusCode, Message: errUnexpectedStatus}
 	}
 }
