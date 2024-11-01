@@ -1,4 +1,4 @@
-# Weather Check Website
+# Weather Checker
 
 ## Usage
 
