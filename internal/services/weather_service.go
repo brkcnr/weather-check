@@ -11,10 +11,11 @@ import (
 	"github.com/brkcnr/getweatherapi/internal/werror"
 )
 
+var BaseURL = "http://api.weatherapi.com/v1/current.json"
+
 func GetWeather(apiKey, city string) (models.Weather, werror.WError) {
-	baseURL := "http://api.weatherapi.com/v1/current.json"
-	fullURL := fmt.Sprintf("%s?key=%s&q=%s&aqi=no", baseURL, apiKey, url.QueryEscape(city))
-	log.Printf("Requesting URL: %s/%s", baseURL, city)
+	fullURL := fmt.Sprintf("%s?key=%s&q=%s&aqi=no", BaseURL, apiKey, url.QueryEscape(city))
+	log.Printf("Requesting URL: %s/%s", BaseURL, city)
 
 	response, err := http.Get(fullURL)
 	if err != nil {
