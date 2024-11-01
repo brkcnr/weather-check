@@ -8,56 +8,46 @@ import (
 	"net/url"
 
 	"github.com/brkcnr/getweatherapi/internal/models"
+	"github.com/brkcnr/getweatherapi/internal/werror"
 )
 
-const (
-	errRequestFailed    = "Failed to make request"
-	errParseResponse    = "Failed to parse response"
-	errLocationData     = "Failed to retrieve location data"
-	errWeatherData      = "Failed to retrieve current weather data"
-	errConditionData    = "Failed to retrieve weather condition data"
-	errInvalidCity      = "Invalid city name. Please try again."
-	errForbiddenAccess  = "Forbidden access"
-	errUnexpectedStatus = "Unexpected status code"
-)
-
-func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
+func GetWeather(apiKey, city string) (models.Weather, werror.WError) {
 	baseURL := "http://api.weatherapi.com/v1/current.json"
 	fullURL := fmt.Sprintf("%s?key=%s&q=%s&aqi=no", baseURL, apiKey, url.QueryEscape(city))
-	log.Println("Requesting URL:", fullURL)
+	log.Printf("Requesting URL: %s/%s", baseURL, city)
 
 	response, err := http.Get(fullURL)
 	if err != nil {
-		return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errRequestFailed}
+		return models.Weather{}, werror.ErrRequestFailed.Wrap(err)
 	}
 	defer response.Body.Close()
 
 	switch response.StatusCode {
 	case http.StatusOK:
-		var apiResponse map[string]interface{}
+		var apiResponse map[string]any
 		if err := json.NewDecoder(response.Body).Decode(&apiResponse); err != nil {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errParseResponse}
+			return models.Weather{}, werror.ErrParseResponse.Wrap(err)
 		}
 
-		location, ok := apiResponse["location"].(map[string]interface{})
+		location, ok := apiResponse["location"].(map[string]any)
 		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errLocationData}
+			return models.Weather{}, werror.ErrLocationDataMissing
 		}
 		cityName, _ := location["name"].(string)
 		region, _ := location["region"].(string)
 		country, _ := location["country"].(string)
 		timezoneId, _ := location["tz_id"].(string)
 
-		current, ok := apiResponse["current"].(map[string]interface{})
+		current, ok := apiResponse["current"].(map[string]any)
 		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errWeatherData}
+			return models.Weather{}, werror.ErrWeatherDataMissing
 		}
 		tempC, _ := current["temp_c"].(float64)
 		feelsLike, _ := current["feelslike_c"].(float64)
 
-		weatherCondition, ok := current["condition"].(map[string]interface{})
+		weatherCondition, ok := current["condition"].(map[string]any)
 		if !ok {
-			return models.Weather{}, models.ErrorMessage{Code: http.StatusInternalServerError, Message: errConditionData}
+			return models.Weather{}, werror.ErrConditionDataMissing
 		}
 		weatherConditionText, _ := weatherCondition["text"].(string)
 
@@ -69,17 +59,17 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 			FeelsLike:        feelsLike,
 			TimeZoneId:       timezoneId,
 			WeatherCondition: weatherConditionText,
-		}, models.ErrorMessage{}
+		}, nil
 
 	case http.StatusBadRequest:
-		return models.Weather{}, models.ErrorMessage{Code: http.StatusBadRequest, Message: errInvalidCity}
+		return models.Weather{}, werror.ErrInvalidCity
 
 	case http.StatusForbidden:
-		var errorResponse map[string]interface{}
+		var errorResponse map[string]any
 		json.NewDecoder(response.Body).Decode(&errorResponse)
-		return models.Weather{}, models.ErrorMessage{Code: http.StatusForbidden, Message: errForbiddenAccess}
+		return models.Weather{}, werror.ErrForbiddenAccess
 
 	default:
-		return models.Weather{}, models.ErrorMessage{Code: response.StatusCode, Message: errUnexpectedStatus}
+		return models.Weather{}, werror.ErrUnexpectedStatus
 	}
 }
