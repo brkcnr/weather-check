@@ -16,6 +16,7 @@ const (
 	errLocationData     = "Failed to retrieve location data"
 	errWeatherData      = "Failed to retrieve current weather data"
 	errConditionData    = "Failed to retrieve weather condition data"
+	errInvalidCity      = "Invalid city name. Please try again."
 	errForbiddenAccess  = "Forbidden access"
 	errUnexpectedStatus = "Unexpected status code"
 )
@@ -69,6 +70,9 @@ func GetWeather(apiKey, city string) (models.Weather, models.ErrorMessage) {
 			TimeZoneId:       timezoneId,
 			WeatherCondition: weatherConditionText,
 		}, models.ErrorMessage{}
+
+	case http.StatusBadRequest:
+		return models.Weather{}, models.ErrorMessage{Code: http.StatusBadRequest, Message: errInvalidCity}
 
 	case http.StatusForbidden:
 		var errorResponse map[string]interface{}
